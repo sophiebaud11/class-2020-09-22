@@ -40,8 +40,11 @@ sep_old <-
          title = course_title,
          name = course_name,
          department = course_department) %>% 
-  filter(u_grad > 10)
-
+  filter(u_grad > 10) %>%
+  group_by(title) %>%
+  summarize(id, name, department, u_grad = sum(u_grad), .groups = "drop") %>%
+  distinct()
+sep_old
 # But this is not correct! Look for Gov 50: Data. What do you see? What can you
 # do to clean it up?
 ```
@@ -51,6 +54,25 @@ sep_old <-
 
 **Prompt:** Read in and clean the new data, creating an object called `sep_new`. 
 
+``` {r}
+sep_new <- 
+  read_excel("new_data/class_enrollment_summary_by_term_9-22-2020.xlsx",
+             skip = 3) %>%
+    clean_names() %>% 
+  filter(! is.na(course_title)) %>% 
+  select(-grad, -non_degree, -x_reg, -vus, -employee, 
+         -withdraw, -total, -instructor_full_name, -course_section_code) %>%
+  rename(id = course_id,
+         new_title = course_title,
+         new_name = course_name,
+         new_department = course_department,
+         new_u_grad = u_grad) %>% 
+  filter(new_u_grad > 10) %>%
+  group_by(new_title) %>%
+  summarize(id, new_name, new_department, new_u_grad = sum(new_u_grad), .groups = "drop") %>%
+  distinct()
+sep_new
+```
 
 
 ### Scene 2
@@ -60,19 +82,38 @@ sep_old <-
 
 Before we start on the model, Wisdom suggests we should:
 
-
-
+Clean and organize the data and make sure it contains exactly the variables we want to work with, so that we don't run into issues with untidy data later on.
+We also want to figure out what exactly we hope to do with & learn fromthe data.
 
 After we have a model, Temperance suggests we should:
 
+Recognize and explain the limitations of our model, and be clear & honest about
+what your model is doing & saying.
 
 
 ### Scene 3
 
 **Prompt:** Which classes had the biggest increases and decreases in undergraduate enrollments between September 1 and today? Make a graphic that shows the 5 biggest increases and decreases. Make it look nice.
 
-
-
+```{r}
+merged_data <- 
+  merge(sep_old, sep_new, by = "id") %>%
+  mutate(en_change_pct = ((new_u_grad - u_grad) / u_grad) * 100) %>% 
+  arrange(desc(en_change_pct)) %>%
+  slice(1:5, 392:396) %>%
+  mutate(is_incr = if_else(condition = en_change_pct > 0, true = "Y", 
+                           false = "N")) %>%
+  ggplot(aes(x = reorder(title, en_change_pct), 
+             y = en_change_pct, fill = is_incr)) + geom_col() + 
+  theme(axis.text.x = element_text(angle = 90)) + 
+  labs(title = "Biggest Enrollment Increases and Decreases in September 2020") +
+  xlab("Class") + ylab("Percent Change in Enrollment") + 
+  scale_color_manual(breaks = c("Y", "N"), values = c("green3", "red3"), 
+                     aesthetics = "fill", 
+                     labels = c("Enrollment Increase",
+                                "Enrollment Decrease"), name = "")
+merged_data
+```
 
 
 ## Scene 4
